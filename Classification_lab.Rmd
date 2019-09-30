@@ -174,19 +174,30 @@ median(resid(Ridge_regression))
 $$Lasso Regression=\sum_{i=1}^{n}(y_i - w_0 - \sum_{j=1}^{p}w_jx_{ij})^2 + \lambda\sum_{j=1}^p|w_j|$$
 2. Create and train model 
 ```{r}
+ctrl =  trainControl(method = "boot", 15)
 
+lasso_regression <- train(Temp ~ Wind + Month, data = train_regression,
+                          method = 'lasso', trControl= ctrl) 
 ```
 
 ```{r}
+lasso_regression
 ```
 
 Examine the residuals 
 ```{r}
+lasso_test_pred <- predict(lasso_regression, newdata = test_regression)
 
 #plot the predicted values vs the observed values
-
+plot_lasso_test_pred <- data.frame(Temp_test_pred = lasso_test_pred, 
+                                   Observed_Temp = test_regression$Temp)
+ggplot(data = plot_lasso_test_pred) +
+  geom_point(aes(x=Observed_Temp, y = Temp_test_pred)) + 
+  ggtitle("True Temp Value vs Predicted Temp Value Lasso Regression") +
+  theme_bw()
 
 #median residual value should be close to zero
+median(resid(lasso_regression))
 ```
 
 
@@ -322,7 +333,6 @@ train_pos <- sample(seq_len(nrow(iris)), size = train_size)
 train_classifier <- iris[train_pos,]
 test_classifier <- iris[-train_pos,]
 
-
 dim(train_classifier)
 dim(test_classifier)
 #only look at two classes 
@@ -414,15 +424,68 @@ ggplot(data = test_classifier_log) +
 
 1. Use the Breast Cancer dataset from the mlbench package, and predict whether the cancer is malignant or benign using one of the algorithms we learned about in class. Give some rationale as to why you chose this algorithm. Plot ROC curves, and confusion matrices. If you are choosing a hyperparameter like K or lambda, explain how and why you chose it. 
 
+I chose to use linear regression because it is highly efficient, interpretable, and produces well-calibrated probabilities. 
 ```{r}
-#libra
-#train
-#test
+library(mlbench)
+data(BreastCancer)
+BreastCancer <- na.omit(BreastCancer)
+BreastCancer
 
-##ctrl <- trainControl()
-## <- train(, data = , method = "", trControl = ctrl)
-## predict(, newdata="")
+trainSize <- floor(0.75 * nrow(BreastCancer))
+set.seed(543)
+trainPos <- sample(seq_len(nrow(BreastCancer)), size = trainSize)
+trainClassifier <- BreastCancer[trainPos,]
+testClassifier <- BreastCancer[-trainPos,]
+
+dim(trainClassifier)
+dim(testClassifier)
 ```
+
+```{r}
+trainClassifierLog <- trainClassifier[c(which(trainClassifier$Class== "benign"),
+                                           which(trainClassifier$Class == "malignant")),]
+testClassifierLog <- testClassifier[c(which(testClassifier$Class == "benign"), 
+                                         which(testClassifier$Class == "malignant")),]
+
+trainClassifierLog$Class <- factor(trainClassifierLog$Class)
+testClassifierLog$Class <- factor(testClassifierLog$Class)
+
+ctrl1 <- trainControl(method = "repeatedcv", repeats = 15,classProbs = T,
+                     savePredictions = T)
+
+
+logisticRegression <- train(Class~ Cell.size, data = trainClassifierLog, 
+                             method = "glm", family= "binomial", trControl = ctrl1)
+
+```
+
+```{r}
+logisticRegression
+summary(logisticRegression)
+```
+
+```{r}
+plot(x = roc(predictor = logisticRegression$pred$benign,
+             response = logisticRegression$pred$obs)$specificities, 
+     y = roc(predictor = logisticRegression$pred$benign, 
+             response = logisticRegression$pred$obs)$sensitivities,
+     col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity",
+     xlab = "Specificity")
+legend("bottomright", legend = paste("Benign v Malignant --", 
+                                     roc(predictor = logisticRegression$pred$benign,
+                                         response = logisticRegression$pred$obs)$auc
+, sep = ""), col = c("blue"), fill = c("blue"))
+```
+
+```{r}
+logisticRegressionPredictClass <- predict(logisticRegression, 
+                                             newdata = testClassifierLog)
+
+confusionMatrix(logisticRegressionPredictClass, 
+                reference = testClassifierLog$Class)
+```
+
+
 
 
 References: 
